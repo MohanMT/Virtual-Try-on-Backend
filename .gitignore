@@ -1,0 +1,90 @@
+@"
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environment
+env/
+venv/
+myenv/
+env.bak/
+venv.bak/
+.venv/
+myenv/
+.venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# dotenv environment variables
+.env
+.env.*
+
+# pyenv
+.python-version
+
+# Pipenv
+Pipfile
+Pipfile.lock
+
+# Poetry
+poetry.lock
+.cache/
+.pdm.toml
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# VS Code settings
+.vscode/
+
+# PyCharm settings
+.idea/
+
+# Test coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+nosetests.xml
+test-results.xml
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Profiling data
+profiler.dat
+
+# pyright
+typings/
+pyrightcache/
+
+# Sphinx documentation
+docs/_build/
+build/
+dist/
+
+# PyInstaller
+*.spec
+"@ | Out-File -FilePath .gitignore -Encoding utf8
