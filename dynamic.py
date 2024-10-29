@@ -1,12 +1,12 @@
+from flask import Flask, Response, request, jsonify
 import cv2
 import numpy as np
 import requests
-from flask import Flask, Response, request, jsonify
-from flask_cors import CORS
 import mediapipe as mp
+from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)
 
 # Initialize MediaPipe Pose
 mp_pose = mp.solutions.pose
@@ -43,7 +43,6 @@ def remove_background_from_clothing_image():
         lower_bound = np.array([0, 0, 200])
         upper_bound = np.array([180, 50, 255])
         
-
         # Create mask for the background
         mask = cv2.inRange(hsv, lower_bound, upper_bound)
 
@@ -167,26 +166,18 @@ def virtual_tryon():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Route to capture the current frame and save as an image
+# Route to send the captured frame directly to frontend
 @app.route('/capture', methods=['POST'])
 def capture_image():
     global captured_frame
     if captured_frame is None:
         return jsonify({"error": "No frame captured"}), 500
 
-    # Save the current frame as an image
-    cv2.imwrite('captured_image.png', captured_frame)
-    return jsonify({"message": "Image captured successfully"}), 200
+    # Encode the captured frame as JPEG in-memory and return it as a response
+    _, buffer = cv2.imencode('.jpg', captured_frame)
+    response_data = buffer.tobytes()
 
-# Route to send the captured image to frontend
-@app.route('/get-captured-image', methods=['GET'])
-def get_captured_image():
-    try:
-        # Load the captured image
-        with open('captured_image.png', 'rb') as img_file:
-            return Response(img_file.read(), mimetype='image/png')
-    except FileNotFoundError:
-        return jsonify({"error": "Captured image not found"}), 404
+    return Response(response_data, mimetype='image/jpeg')
 
 
 if __name__ == "__main__":
