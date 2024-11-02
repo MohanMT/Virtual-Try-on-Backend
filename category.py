@@ -15,14 +15,13 @@ pose = mp_pose.Pose()
 clothing_image = None  # Placeholder for the clothing image
 captured_frame = None  # Store the captured frame
 
-
 # Function to download the clothing image from the given URL
 def download_clothing_image(image_url):
     global clothing_image
     response = requests.get(image_url)
     if response.status_code != 200:
         raise ValueError(f"Error downloading image: {response.status_code}")
-    
+
     image_array = np.frombuffer(response.content, np.uint8)
     clothing_image = cv2.imdecode(image_array, cv2.IMREAD_UNCHANGED)
 
@@ -62,37 +61,29 @@ def remove_background_from_clothing_image():
 
 # Function to overlay clothes for male landmarks
 def overlay_male_clothes(frame, landmarks):
-    # Extract male-specific landmarks for shoulder and hip positions
     shoulder_left = landmarks[11]  # Left shoulder
     shoulder_right = landmarks[12]  # Right shoulder
     hip_left = landmarks[23]  # Left hip
     hip_right = landmarks[24]  # Right hip
 
-    # Calculate shoulder width and torso height for dynamic scaling
     shoulder_width = int(abs((shoulder_right.x - shoulder_left.x) * frame.shape[1]))
     torso_height = int(abs((hip_left.y - shoulder_left.y) * frame.shape[0]))
- 
-    # Scale up the clothing by a factor
+
     scale_factor = 1.5
     shoulder_width = int(shoulder_width * scale_factor)
     torso_height = int(torso_height * scale_factor)
 
-    # Resize clothing to fit between shoulders and hips
     resized_clothes = cv2.resize(clothing_image, (shoulder_width, torso_height))
 
-    # Calculate center point for clothing placement
     center_x = int((shoulder_left.x + shoulder_right.x) / 2 * frame.shape[1])
     center_y = int(shoulder_left.y * frame.shape[0])
 
-    # Position the clothing above the shoulders
     y_offset = center_y - int(torso_height / 2)
     x_offset = center_x - int(shoulder_width / 2)
 
-    # Ensure the offsets are within the frame bounds
     y_offset = max(0, y_offset)
     x_offset = max(0, x_offset)
 
-    # Crop the clothing image if needed to fit within the frame
     available_height = frame.shape[0] - y_offset
     available_width = frame.shape[1] - x_offset
 
@@ -101,7 +92,6 @@ def overlay_male_clothes(frame, landmarks):
 
     cropped_clothes = resized_clothes[:clothing_height, :clothing_width]
 
-    # Create a mask from the alpha channel
     alpha_channel = cropped_clothes[:, :, 3] / 255.0
     for c in range(3):  # Assuming clothing image has 3 channels (RGB)
         frame[y_offset:y_offset + clothing_height, x_offset:x_offset + clothing_width, c] = (
@@ -111,37 +101,29 @@ def overlay_male_clothes(frame, landmarks):
 
 # Function to overlay clothes for female landmarks
 def overlay_female_clothes(frame, landmarks):
-    # Extract female-specific landmarks for shoulder and hip positions
     shoulder_left = landmarks[11]  # Left shoulder
     shoulder_right = landmarks[12]  # Right shoulder
     hip_left = landmarks[24]  # Left hip
     hip_right = landmarks[23]  # Right hip
 
-    # Calculate shoulder width and torso height for dynamic scaling
     shoulder_width = int(abs((shoulder_right.x - shoulder_left.x) * frame.shape[1]))
     torso_height = int(abs((hip_left.y - shoulder_left.y) * frame.shape[0]))
 
-    # Scale up the clothing by a factor
     scale_factor = 1.5
     shoulder_width = int(shoulder_width * scale_factor)
     torso_height = int(torso_height * scale_factor)
 
-    # Resize clothing to fit between shoulders and hips
     resized_clothes = cv2.resize(clothing_image, (shoulder_width, torso_height))
 
-    # Calculate center point for clothing placement
     center_x = int((shoulder_left.x + shoulder_right.x) / 2 * frame.shape[1])
     center_y = int(shoulder_left.y * frame.shape[0])
 
-    # Position the clothing above the shoulders
     y_offset = center_y - int(torso_height / 2)
     x_offset = center_x - int(shoulder_width / 2)
 
-    # Ensure the offsets are within the frame bounds
     y_offset = max(0, y_offset)
     x_offset = max(0, x_offset)
 
-    # Crop the clothing image if needed to fit within the frame
     available_height = frame.shape[0] - y_offset
     available_width = frame.shape[1] - x_offset
 
@@ -150,7 +132,6 @@ def overlay_female_clothes(frame, landmarks):
 
     cropped_clothes = resized_clothes[:clothing_height, :clothing_width]
 
-    # Create a mask from the alpha channel
     alpha_channel = cropped_clothes[:, :, 3] / 255.0
     for c in range(3):  # Assuming clothing image has 3 channels (RGB)
         frame[y_offset:y_offset + clothing_height, x_offset:x_offset + clothing_width, c] = (
@@ -166,9 +147,9 @@ def overlay_clothes(frame, landmarks, category):
         print("Clothing image is not loaded correctly.")
         return
 
-    # Check category and call the appropriate function
-    if category == "men" or category == "kids":
-        overlay_male_clothes(frame, landmarks)  # Use men landmarks for kids
+    # Use male landmarks for "Infants" and "kids"
+    if category in ["Infants", "kids"]:
+        overlay_male_clothes(frame, landmarks)  # Use male landmarks for infants and kids
     elif category == "woman":
         overlay_female_clothes(frame, landmarks)
     else:
@@ -178,7 +159,6 @@ def overlay_clothes(frame, landmarks, category):
 def generate_frames():
     global captured_frame
     cap = cv2.VideoCapture(0)  # Use the default webcam
-
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -190,8 +170,8 @@ def generate_frames():
 
         # Check if pose landmarks are detected
         if results.pose_landmarks:
-            # Assume category is passed as "male" or "female"
-            overlay_clothes(frame, results.pose_landmarks.landmark, "male")  # Replace with actual category logic
+            category = "Infants"  # Replace this with your actual logic to determine the category
+            overlay_clothes(frame, results.pose_landmarks.landmark, category)
 
         captured_frame = frame  # Store the current frame for capturing
 
@@ -203,7 +183,7 @@ def generate_frames():
 
         frame = buffer.tobytes()
 
-        # Return the frame to be dis played in the web feed
+        # Return the frame to be displayed in the web feed
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
@@ -231,9 +211,8 @@ def virtual_tryon():
         return jsonify({'success': 'Clothing image processed successfully.'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
 
-    # Route to capture the current frame and save as an image
+# Route to capture the current frame and save as an image
 @app.route('/capture', methods=['POST'])
 def capture_image():
     global captured_frame
@@ -254,8 +233,6 @@ def get_captured_image():
     except FileNotFoundError:
         return jsonify({"error": "Captured image not found"}), 404
 
-
 # Start the Flask application
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
- 
