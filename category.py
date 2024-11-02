@@ -71,7 +71,7 @@ def overlay_male_clothes(frame, landmarks):
     # Calculate shoulder width and torso height for dynamic scaling
     shoulder_width = int(abs((shoulder_right.x - shoulder_left.x) * frame.shape[1]))
     torso_height = int(abs((hip_left.y - shoulder_left.y) * frame.shape[0]))
-
+ 
     # Scale up the clothing by a factor
     scale_factor = 1.5
     shoulder_width = int(shoulder_width * scale_factor)
@@ -158,7 +158,6 @@ def overlay_female_clothes(frame, landmarks):
             cropped_clothes[:, :, c] * alpha_channel
         )
 
-# Function to overlay clothes based on product category
 # Function to overlay clothes based on product category
 def overlay_clothes(frame, landmarks, category):
     global clothing_image
