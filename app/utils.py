@@ -4,15 +4,13 @@ import numpy as np
 import mediapipe as mp
 import requests
 
-
-
 clothing_image = None  # Placeholder for the clothing image
 # Initialize MediaPipe Pose
 mp_pose = mp.solutions.pose
 pose = mp_pose.Pose()
 
 
-# Function to load clothing image from a local path
+# Function to load clothing image from a local path or URL
 def load_clothing_image(image_path):
     global clothing_image
     
@@ -35,6 +33,7 @@ def load_clothing_image(image_path):
         else:
             raise FileNotFoundError(f"Clothing image path does not exist: {image_path}")
 
+
 # Function to remove background from clothing image using color threshold
 def remove_background_from_clothing_image():
     global clothing_image
@@ -55,6 +54,7 @@ def remove_background_from_clothing_image():
         clothing_image = cv2.merge((b_channel, g_channel, r_channel, alpha_channel))
 
 
+# Function to overlay clothes based on category and subcategory
 def overlay_clothes(frame, landmarks, category, subcategory):
     global clothing_image
 
@@ -62,25 +62,29 @@ def overlay_clothes(frame, landmarks, category, subcategory):
         print("Clothing image is not loaded correctly.")
         return
 
-    if category in ["Infants", "Kids"]:
-        overlay_male_clothes(frame, landmarks)
+    if category == "Men":
+        if subcategory == "upper_body":
+            overlay_male_upper_body_clothes(frame, landmarks)
+        elif subcategory == "full_body":
+            overlay_male_full_body_clothes(frame, landmarks)
+        else:
+            print("Unknown subcategory for Men:", subcategory)
     elif category == "Women":
-        if subcategory == "tshirt":
+        if subcategory == "upper_body":
             overlay_female_upper_body_clothes(frame, landmarks)
-        elif subcategory == "frock":
+        elif subcategory == "full_body":
             overlay_female_full_body_clothes(frame, landmarks)
         else:
-            print("Unknown subcategory:", subcategory)
+            print("Unknown subcategory for Women:", subcategory)
     else:
         print("Unknown category:", category)
 
 
-# Function to overlay clothes for male landmarks
-def overlay_male_clothes(frame, landmarks):
+# Function to overlay upper body clothes for male landmarks
+def overlay_male_upper_body_clothes(frame, landmarks):
     shoulder_left = landmarks[11]  # Left shoulder
     shoulder_right = landmarks[12]  # Right shoulder
     hip_left = landmarks[23]  # Left hip
-    hip_right = landmarks[24]  # Right hip
 
     shoulder_width = int(abs((shoulder_right.x - shoulder_left.x) * frame.shape[1]))
     torso_height = int(abs((hip_left.y - shoulder_left.y) * frame.shape[0]))
@@ -114,6 +118,38 @@ def overlay_male_clothes(frame, landmarks):
             frame[y_offset:y_offset + clothing_height, x_offset:x_offset + clothing_width, c] * (1 - alpha_channel) +
             cropped_clothes[:, :, c] * alpha_channel
         )
+
+def overlay_male_full_body_clothes(frame, landmarks):
+    shoulder_left = landmarks[11]
+    shoulder_right = landmarks[12]
+    hip_left = landmarks[23]
+    hip_right = landmarks[24]
+
+    shoulder_width = int(abs((shoulder_right.x - shoulder_left.x) * frame.shape[1]))
+    torso_height = int(abs((hip_right.y - shoulder_left.y) * frame.shape[0]) * 1.8)
+
+    resized_clothes = cv2.resize(clothing_image, (shoulder_width, torso_height))
+    center_x = int((shoulder_left.x + shoulder_right.x) / 2 * frame.shape[1])
+    center_y = int(hip_left.y * frame.shape[0])
+
+    y_offset = center_y - int(torso_height)
+    x_offset = center_x - int(shoulder_width / 2)
+    y_offset = max(0, y_offset)
+    x_offset = max(0, x_offset)
+
+    available_height = frame.shape[0] - y_offset
+    available_width = frame.shape[1] - x_offset
+    clothing_height = min(resized_clothes.shape[0], available_height)
+    clothing_width = min(resized_clothes.shape[1], available_width)
+    cropped_clothes = resized_clothes[:clothing_height, :clothing_width]
+
+    alpha_channel = cropped_clothes[:, :, 3] / 255.0
+    for c in range(3):
+        frame[y_offset:y_offset + clothing_height, x_offset:x_offset + clothing_width, c] = (
+            frame[y_offset:y_offset + clothing_height, x_offset:x_offset + clothing_width, c] * (1 - alpha_channel) +
+            cropped_clothes[:, :, c] * alpha_channel
+        )
+
 
 # Function to overlay upper body clothes for female landmarks (like t-shirts)
 def overlay_female_upper_body_clothes(frame, landmarks):
@@ -192,7 +228,6 @@ def overlay_female_full_body_clothes(frame, landmarks):
             cropped_clothes[:, :, c] * alpha_channel
         )
 
-
 # Function to generate frames from the webcam feed
 def generate_frames():
     global captured_frame
@@ -208,8 +243,8 @@ def generate_frames():
 
         # Check if pose landmarks are detected
         if results.pose_landmarks:
-            category = "female"  # Replace this with your actual logic to determine the category
-            subcategory = "tshirt"  # Replace this with your actual logic to determine the subcategory
+            category = "Men"  # Replace with actual logic for category selection
+            subcategory = "upper_body"  # Replace with actual logic for subcategory selection
             overlay_clothes(frame, results.pose_landmarks.landmark, category, subcategory)
 
         captured_frame = frame  # Store the current frame for capturing
