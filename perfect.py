@@ -1,9 +1,9 @@
 import cv2
 import numpy as np
-import requests
 from flask import Flask, Response, request, jsonify
 from flask_cors import CORS
 import mediapipe as mp
+import os
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -15,18 +15,15 @@ pose = mp_pose.Pose()
 clothing_image = None  # Placeholder for the clothing image
 captured_frame = None  # Store the captured frame
 
-# Function to download the clothing image from the given URL
-def download_clothing_image(image_url):
+# Function to load clothing image from a local path
+def load_clothing_image(image_path):
     global clothing_image
-    response = requests.get(image_url)
-    if response.status_code != 200:
-        raise ValueError(f"Error downloading image: {response.status_code}")
-
-    image_array = np.frombuffer(response.content, np.uint8)
-    clothing_image = cv2.imdecode(image_array, cv2.IMREAD_UNCHANGED)
-
-    if clothing_image is None:
-        raise FileNotFoundError(f"Could not decode clothing image from {image_url}")
+    if os.path.exists(image_path):
+        clothing_image = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+        if clothing_image is None:
+            raise FileNotFoundError(f"Could not load clothing image from {image_path}")
+    else:
+        raise FileNotFoundError(f"Clothing image path does not exist: {image_path}")
 
 # Function to load clothing image and remove background using color threshold
 def remove_background_from_clothing_image():
@@ -99,14 +96,11 @@ def overlay_male_clothes(frame, landmarks):
             cropped_clothes[:, :, c] * alpha_channel
         )
 
-
-
-# Function to overlay clothes for female landmarks
-def overlay_female_clothes(frame, landmarks):
+# Function to overlay upper body clothes for female landmarks (like t-shirts)
+def overlay_female_upper_body_clothes(frame, landmarks):
     shoulder_left = landmarks[11]  # Left shoulder
     shoulder_right = landmarks[12]  # Right shoulder
-    hip_left = landmarks[24]  # Left hip
-    hip_right = landmarks[23]  # Right hip
+    hip_left = landmarks[23]  # Left hip
 
     shoulder_width = int(abs((shoulder_right.x - shoulder_left.x) * frame.shape[1]))
     torso_height = int(abs((hip_left.y - shoulder_left.y) * frame.shape[0]))
@@ -141,8 +135,47 @@ def overlay_female_clothes(frame, landmarks):
             cropped_clothes[:, :, c] * alpha_channel
         )
 
-# Function to overlay clothes based on product category
-def overlay_clothes(frame, landmarks, category):
+# Function to overlay full body clothes for female landmarks (like frocks)
+def overlay_female_full_body_clothes(frame, landmarks):
+    shoulder_left = landmarks[11]  # Left shoulder
+    shoulder_right = landmarks[12]  # Right shoulder
+    hip_left = landmarks[24]  # Left hip
+    hip_right = landmarks[23]  # Right hip
+
+    torso_height = int(abs((hip_left.y - shoulder_left.y) * frame.shape[0]))
+
+    scale_factor = 1.5
+    torso_height = int(torso_height * scale_factor)
+
+    # Assuming the clothing image is designed for full-body
+    resized_clothes = cv2.resize(clothing_image, (frame.shape[1], torso_height))
+
+    center_x = int((shoulder_left.x + shoulder_right.x) / 2 * frame.shape[1])
+    center_y = int(hip_left.y * frame.shape[0])
+
+    y_offset = center_y - int(torso_height)
+    x_offset = center_x - int(frame.shape[1] / 2)
+
+    y_offset = max(0, y_offset)
+    x_offset = max(0, x_offset)
+
+    available_height = frame.shape[0] - y_offset
+    available_width = frame.shape[1] - x_offset
+
+    clothing_height = min(resized_clothes.shape[0], available_height)
+    clothing_width = min(resized_clothes.shape[1], available_width)
+
+    cropped_clothes = resized_clothes[:clothing_height, :clothing_width]
+
+    alpha_channel = cropped_clothes[:, :, 3] / 255.0
+    for c in range(3):  # Assuming clothing image has 3 channels (RGB)
+        frame[y_offset:y_offset + clothing_height, x_offset:x_offset + clothing_width, c] = (
+            frame[y_offset:y_offset + clothing_height, x_offset:x_offset + clothing_width, c] * (1 - alpha_channel) +
+            cropped_clothes[:, :, c] * alpha_channel
+        )
+
+# Function to overlay clothes based on product category and subcategory
+def overlay_clothes(frame, landmarks, category, subcategory):
     global clothing_image
 
     if clothing_image is None:
@@ -151,9 +184,14 @@ def overlay_clothes(frame, landmarks, category):
 
     # Use male landmarks for "Infants" and "kids"
     if category in ["Infants", "Kids"]:
-        overlay_male_clothes(frame, landmarks)  # Use male landmarks for infants and kids
+        overlay_male_clothes(frame, landmarks)
     elif category == "Women":
-        overlay_female_clothes(frame, landmarks)
+        if subcategory == "tshirt":
+            overlay_female_upper_body_clothes(frame, landmarks)
+        elif subcategory == "frock":
+            overlay_female_full_body_clothes(frame, landmarks)
+        else:
+            print("Unknown subcategory:", subcategory)
     else:
         print("Unknown category:", category)
 
@@ -172,8 +210,9 @@ def generate_frames():
 
         # Check if pose landmarks are detected
         if results.pose_landmarks:
-            category = "Infants"  # Replace this with your actual logic to determine the category
-            overlay_clothes(frame, results.pose_landmarks.landmark, category)
+            category = "female"  # Replace this with your actual logic to determine the category
+            subcategory = "tshirt"  # Replace this with your actual logic to determine the subcategory
+            overlay_clothes(frame, results.pose_landmarks.landmark, category, subcategory)
 
         captured_frame = frame  # Store the current frame for capturing
 
@@ -194,7 +233,7 @@ def generate_frames():
 def video_feed():
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-# Route to receive product ID and image URL
+# Route to receive clothing image path
 @app.route('/api/virtual-tryon', methods=['POST'])
 def virtual_tryon():
     global clothing_image
@@ -202,14 +241,14 @@ def virtual_tryon():
     # Get the JSON data from the request
     data = request.get_json()
 
-    if 'image_url' not in data:
-        return jsonify({'error': 'No image URL provided'}), 400
+    if 'image_path' not in data:
+        return jsonify({'error': 'No image path provided'}), 400
 
-    image_url = data['image_url']
+    image_path = data['image_path']
 
     try:
-        download_clothing_image(image_url)
-        remove_background_from_clothing_image()  # Clean the background after downloading
+        load_clothing_image(image_path)
+        remove_background_from_clothing_image()  # Clean the background after loading
         return jsonify({'success': 'Clothing image processed successfully.'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
