@@ -4,12 +4,17 @@ from .utils import (
     remove_background_from_clothing_image,
     generate_frames,
 )
+import cv2
 
 main = Blueprint('main', __name__)
 
 @main.route('/video_feed')
 def video_feed():
-    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    # Set default values for category and subcategory
+    category = "Kids"
+    subcategory = "Top wear"
+    
+    return Response(generate_frames(category, subcategory), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @main.route('/api/virtual-tryon', methods=['POST'])
 def virtual_tryon():
@@ -36,6 +41,7 @@ def capture_image():
 
     cv2.imwrite('captured_image.png', captured_frame)
     return jsonify({"message": "Image captured successfully"}), 200
+
 
 @main.route('/get-captured-image', methods=['GET'])
 def get_captured_image():

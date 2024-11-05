@@ -253,6 +253,7 @@ def virtual_tryon():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 # Route to capture the current frame and save as an image
 @app.route('/capture', methods=['POST'])
 def capture_image():
